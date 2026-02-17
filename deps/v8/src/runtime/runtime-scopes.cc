@@ -12,7 +12,6 @@
 #include "src/execution/isolate-inl.h"
 #include "src/execution/isolate.h"
 #include "src/handles/handles.h"
-#include "src/heap/heap-inl.h"  // For ToBoolean. TODO(jkummerow): Drop.
 #include "src/interpreter/bytecode-flags-and-tokens.h"
 #include "src/objects/arguments-inl.h"
 #include "src/objects/fixed-array.h"
@@ -23,6 +22,7 @@
 #include "src/objects/oddball.h"
 #include "src/objects/smi.h"
 #include "src/objects/tagged.h"
+#include "src/roots/roots-inl.h"
 #include "src/runtime/runtime-utils.h"
 
 namespace v8 {
@@ -38,6 +38,12 @@ RUNTIME_FUNCTION(Runtime_ThrowUsingAssignError) {
   HandleScope scope(isolate);
   THROW_NEW_ERROR_RETURN_FAILURE(isolate,
                                  NewTypeError(MessageTemplate::kUsingAssign));
+}
+
+RUNTIME_FUNCTION(Runtime_ThrowAwaitUsingAssignError) {
+  HandleScope scope(isolate);
+  THROW_NEW_ERROR_RETURN_FAILURE(
+      isolate, NewTypeError(MessageTemplate::kAwaitUsingAssign));
 }
 
 namespace {
@@ -150,8 +156,8 @@ RUNTIME_FUNCTION(Runtime_DeclareModuleExports) {
   DirectHandle<FixedArray> exports(
       Cast<SourceTextModule>(context->extension())->regular_exports(), isolate);
 
-  int length = declarations->length();
-  FOR_WITH_HANDLE_SCOPE(isolate, int i = 0, i, i < length, i++) {
+  uint32_t length = declarations->ulength().value();
+  FOR_WITH_HANDLE_SCOPE(isolate, uint32_t i = 0, i, i < length, i++) {
     Tagged<Object> decl = declarations->get(i);
     int index;
     Tagged<Object> value;
@@ -193,8 +199,8 @@ RUNTIME_FUNCTION(Runtime_DeclareGlobals) {
       isolate);
 
   // Traverse the name/value pairs and set the properties.
-  int length = declarations->length();
-  FOR_WITH_HANDLE_SCOPE(isolate, int i = 0, i, i < length, i++) {
+  uint32_t length = declarations->ulength().value();
+  FOR_WITH_HANDLE_SCOPE(isolate, uint32_t i = 0, i, i < length, i++) {
     Handle<Object> decl(declarations->get(i), isolate);
     Handle<String> name;
     Handle<Object> value;
@@ -530,9 +536,9 @@ DirectHandleVector<Object> GetCallerArguments(Isolate* isolate) {
 
     return param_data;
   } else {
-    int args_count = frame->GetActualArgumentCount();
+    uint32_t args_count = frame->GetActualArgumentCount();
     DirectHandleVector<Object> param_data(isolate, args_count);
-    for (int i = 0; i < args_count; i++) {
+    for (uint32_t i = 0; i < args_count; i++) {
       DirectHandle<Object> val =
           DirectHandle<Object>(frame->GetParameter(i), isolate);
       param_data[i] = val;
@@ -802,7 +808,7 @@ RUNTIME_FUNCTION(Runtime_DeleteLookupSlot) {
   DirectHandle<JSReceiver> object = Cast<JSReceiver>(holder);
   Maybe<bool> result = JSReceiver::DeleteProperty(isolate, object, name);
   MAYBE_RETURN(result, ReadOnlyRoots(isolate).exception());
-  return isolate->heap()->ToBoolean(result.FromJust());
+  return ReadOnlyRoots(isolate).boolean_value(result.FromJust());
 }
 
 namespace {
